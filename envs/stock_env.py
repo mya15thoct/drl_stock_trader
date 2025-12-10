@@ -107,13 +107,8 @@ class StockTradingEnv:
             if pd.api.types.is_datetime64_any_dtype(df['Date']) and hasattr(df['Date'].dtype, 'tz') and df['Date'].dt.tz is not None:
                 df['Date'] = df['Date'].dt.tz_localize(None)
             
-            # Tiếp tục lọc dữ liệu theo khoảng thời gian
-            # Handle both string and Timestamp comparison (pandas 2.0+ compatibility)
-            try:
-                df = df[(df['Date'] >= '2018-01-01') & (df['Date'] < '2025-01-01')]
-            except TypeError:
-                # If string comparison fails, convert to Timestamp
-                df = df[(df['Date'] >= pd.Timestamp('2018-01-01')) & (df['Date'] < pd.Timestamp('2025-01-01'))]
+            # Tiếp tục lọc dữ liệu theo khoảng thời gian (use pd.Timestamp for pandas 2.0+ compatibility)
+            df = df[(df['Date'] >= pd.Timestamp('2018-01-01')) & (df['Date'] < pd.Timestamp('2025-01-01'))]
             # print(f"After date conversion: {df['Date'].min()} to {df['Date'].max()}")
         
         # Sắp xếp dữ liệu theo ngày tăng dần (từ cũ đến mới)
@@ -316,11 +311,8 @@ class StockTradingEnv:
             if pd.api.types.is_datetime64_any_dtype(df_full['Date']) and hasattr(df_full['Date'].dtype, 'tz') and df_full['Date'].dt.tz is not None:
                 df_full['Date'] = df_full['Date'].dt.tz_localize(None)
             
-            # Handle both string and Timestamp comparison (pandas 2.0+ compatibility)
-            try:
-                df_full = df_full[(df_full['Date'] >= '2018-01-01') & (df_full['Date'] < '2025-01-01')]
-            except TypeError:
-                df_full = df_full[(df_full['Date'] >= pd.Timestamp('2018-01-01')) & (df_full['Date'] < pd.Timestamp('2025-01-01'))]
+            # Filter date range (use pd.Timestamp for pandas 2.0+ compatibility)
+            df_full = df_full[(df_full['Date'] >= pd.Timestamp('2018-01-01')) & (df_full['Date'] < pd.Timestamp('2025-01-01'))]
             df_full = df_full.sort_values('Date').reset_index(drop=True)
             
             # Numeric conversion
