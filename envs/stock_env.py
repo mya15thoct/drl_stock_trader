@@ -103,6 +103,10 @@ class StockTradingEnv:
             # Hiện giờ in ra thông tin ngày sau khi đã chuyển đổi kiểu
             # print(f"Original date range: {df['Date'].min()} to {df['Date'].max()}")
             
+            # Remove timezone if present (for tz-aware timestamps)
+            if df['Date'].dt.tz is not None:
+                df['Date'] = df['Date'].dt.tz_localize(None)
+            
             # Tiếp tục lọc dữ liệu theo khoảng thời gian
             # Handle both string and Timestamp comparison (pandas 2.0+ compatibility)
             try:
@@ -307,6 +311,11 @@ class StockTradingEnv:
             # Date processing
             df_full['Date'] = pd.to_datetime(df_full['Date'], errors='coerce')
             df_full = df_full.dropna(subset=['Date'])
+            
+            # Remove timezone if present
+            if df_full['Date'].dt.tz is not None:
+                df_full['Date'] = df_full['Date'].dt.tz_localize(None)
+            
             # Handle both string and Timestamp comparison (pandas 2.0+ compatibility)
             try:
                 df_full = df_full[(df_full['Date'] >= '2018-01-01') & (df_full['Date'] < '2025-01-01')]
