@@ -104,7 +104,12 @@ class StockTradingEnv:
             # print(f"Original date range: {df['Date'].min()} to {df['Date'].max()}")
             
             # Tiếp tục lọc dữ liệu theo khoảng thời gian
-            df = df[(df['Date'] >= '2018-01-01') & (df['Date'] < '2025-01-01')]
+            # Handle both string and Timestamp comparison (pandas 2.0+ compatibility)
+            try:
+                df = df[(df['Date'] >= '2018-01-01') & (df['Date'] < '2025-01-01')]
+            except TypeError:
+                # If string comparison fails, convert to Timestamp
+                df = df[(df['Date'] >= pd.Timestamp('2018-01-01')) & (df['Date'] < pd.Timestamp('2025-01-01'))]
             # print(f"After date conversion: {df['Date'].min()} to {df['Date'].max()}")
         
         # Sắp xếp dữ liệu theo ngày tăng dần (từ cũ đến mới)
@@ -302,7 +307,11 @@ class StockTradingEnv:
             # Date processing
             df_full['Date'] = pd.to_datetime(df_full['Date'], errors='coerce')
             df_full = df_full.dropna(subset=['Date'])
-            df_full = df_full[(df_full['Date'] >= '2018-01-01') & (df_full['Date'] < '2025-01-01')]
+            # Handle both string and Timestamp comparison (pandas 2.0+ compatibility)
+            try:
+                df_full = df_full[(df_full['Date'] >= '2018-01-01') & (df_full['Date'] < '2025-01-01')]
+            except TypeError:
+                df_full = df_full[(df_full['Date'] >= pd.Timestamp('2018-01-01')) & (df_full['Date'] < pd.Timestamp('2025-01-01'))]
             df_full = df_full.sort_values('Date').reset_index(drop=True)
             
             # Numeric conversion
