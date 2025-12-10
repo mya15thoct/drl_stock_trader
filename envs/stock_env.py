@@ -96,16 +96,9 @@ class StockTradingEnv:
         
         # Ensure 'Date' column is in datetime format
         if 'Date' in df.columns:
-            # Chuyển đổi cột Date sang datetime trước khi thực hiện bất kỳ phép toán nào
-            df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
+            # Chuyển đổi cột Date sang datetime và LOẠI BỎ TIMEZONE ngay (pandas 2.0+ compatibility)
+            df['Date'] = pd.to_datetime(df['Date'], errors='coerce', utc=True).dt.tz_localize(None)
             df = df.dropna(subset=['Date'])  # Loại bỏ các hàng có ngày không hợp lệ
-            
-            # Hiện giờ in ra thông tin ngày sau khi đã chuyển đổi kiểu
-            # print(f"Original date range: {df['Date'].min()} to {df['Date'].max()}")
-            
-            # Remove timezone if present (for tz-aware timestamps)
-            if pd.api.types.is_datetime64_any_dtype(df['Date']) and hasattr(df['Date'].dtype, 'tz') and df['Date'].dt.tz is not None:
-                df['Date'] = df['Date'].dt.tz_localize(None)
             
             # Tiếp tục lọc dữ liệu theo khoảng thời gian (use pd.Timestamp for pandas 2.0+ compatibility)
             df = df[(df['Date'] >= pd.Timestamp('2018-01-01')) & (df['Date'] < pd.Timestamp('2025-01-01'))]
@@ -303,13 +296,9 @@ class StockTradingEnv:
                 if old_col in df_full.columns:
                     df_full = df_full.rename(columns={old_col: new_col})
             
-            # Date processing
-            df_full['Date'] = pd.to_datetime(df_full['Date'], errors='coerce')
+            # Date processing - convert and STRIP TIMEZONE immediately (pandas 2.0+ compatibility)
+            df_full['Date'] = pd.to_datetime(df_full['Date'], errors='coerce', utc=True).dt.tz_localize(None)
             df_full = df_full.dropna(subset=['Date'])
-            
-            # Remove timezone if present
-            if pd.api.types.is_datetime64_any_dtype(df_full['Date']) and hasattr(df_full['Date'].dtype, 'tz') and df_full['Date'].dt.tz is not None:
-                df_full['Date'] = df_full['Date'].dt.tz_localize(None)
             
             # Filter date range (use pd.Timestamp for pandas 2.0+ compatibility)
             df_full = df_full[(df_full['Date'] >= pd.Timestamp('2018-01-01')) & (df_full['Date'] < pd.Timestamp('2025-01-01'))]
