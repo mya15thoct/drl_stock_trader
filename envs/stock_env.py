@@ -530,25 +530,37 @@ class StockTradingEnv:
             return np.nan
 
     def _perform_multidimensional_classification(self, metrics):
-        """Multidimensional classification using VN market thresholds"""
+        """Multidimensional classification using market-specific thresholds"""
         
-        # Load VN thresholds (hard-code từ JSON hoặc load file)
-        VN_THRESHOLDS = {
-            'vol_low': 0.3832, 'vol_high': 0.4768,
-            'risk_low': 0.6493, 'risk_high': 0.7754,
-            'momentum_low': 0.0321, 'momentum_high': 0.1144,
-            'hurst_low': -0.0103, 'hurst_high': 0.0112
-        }
+        # Detect market based on data path
+        is_us_market = 'us_dataset' in self.data_path.lower() or 'us_' in self.data_path.lower()
+        
+        if is_us_market:
+            # US market thresholds (based on 50 US stocks analysis)
+            THRESHOLDS = {
+                'vol_low': 0.275, 'vol_high': 0.326,
+                'risk_low': 0.387, 'risk_high': 0.553,
+                'momentum_low': 0.02, 'momentum_high': 0.10,
+                'hurst_low': -0.02, 'hurst_high': 0.02
+            }
+        else:
+            # VN market thresholds (original)
+            THRESHOLDS = {
+                'vol_low': 0.3832, 'vol_high': 0.4768,
+                'risk_low': 0.6493, 'risk_high': 0.7754,
+                'momentum_low': 0.0321, 'momentum_high': 0.1144,
+                'hurst_low': -0.0103, 'hurst_high': 0.0112
+            }
         
         # Normalize all metrics (0-1 scale)
         vol_score = self._normalize_score(metrics['annualized_volatility'], 
-                                        VN_THRESHOLDS['vol_low'], VN_THRESHOLDS['vol_high'])
+                                        THRESHOLDS['vol_low'], THRESHOLDS['vol_high'])
         risk_score = self._normalize_score(abs(metrics['max_drawdown']), 
-                                        VN_THRESHOLDS['risk_low'], VN_THRESHOLDS['risk_high'])
+                                        THRESHOLDS['risk_low'], THRESHOLDS['risk_high'])
         momentum_score = self._normalize_score(abs(metrics['autocorr_1d']), 
-                                            VN_THRESHOLDS['momentum_low'], VN_THRESHOLDS['momentum_high'])
+                                            THRESHOLDS['momentum_low'], THRESHOLDS['momentum_high'])
         hurst_score = self._normalize_score(metrics['hurst_exponent'], 
-                                        VN_THRESHOLDS['hurst_low'], VN_THRESHOLDS['hurst_high'])
+                                        THRESHOLDS['hurst_low'], THRESHOLDS['hurst_high'])
         
         # WEIGHTED COMPOSITE SCORE
         composite_score = (
