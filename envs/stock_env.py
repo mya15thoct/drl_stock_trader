@@ -104,7 +104,7 @@ class StockTradingEnv:
             # print(f"Original date range: {df['Date'].min()} to {df['Date'].max()}")
             
             # Remove timezone if present (for tz-aware timestamps)
-            if df['Date'].dt.tz is not None:
+            if pd.api.types.is_datetime64_any_dtype(df['Date']) and hasattr(df['Date'].dtype, 'tz') and df['Date'].dt.tz is not None:
                 df['Date'] = df['Date'].dt.tz_localize(None)
             
             # Tiếp tục lọc dữ liệu theo khoảng thời gian
@@ -313,7 +313,7 @@ class StockTradingEnv:
             df_full = df_full.dropna(subset=['Date'])
             
             # Remove timezone if present
-            if df_full['Date'].dt.tz is not None:
+            if pd.api.types.is_datetime64_any_dtype(df_full['Date']) and hasattr(df_full['Date'].dtype, 'tz') and df_full['Date'].dt.tz is not None:
                 df_full['Date'] = df_full['Date'].dt.tz_localize(None)
             
             # Handle both string and Timestamp comparison (pandas 2.0+ compatibility)
