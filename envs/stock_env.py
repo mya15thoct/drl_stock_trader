@@ -99,9 +99,7 @@ class StockTradingEnv:
             # Chuyển đổi cột Date sang datetime và LOẠI BỎ TIMEZONE ngay (pandas 2.0+ compatibility)
             df['Date'] = pd.to_datetime(df['Date'], errors='coerce', utc=True).dt.tz_localize(None)
             df = df.dropna(subset=['Date'])  # Loại bỏ các hàng có ngày không hợp lệ
-            
-            # Hiện giờ in ra thông tin ngày sau khi đã chuyển đổi kiểu
-            # print(f"Original date range: {df['Date'].min()} to {df['Date'].max()}")
+
             
             # Tiếp tục lọc dữ liệu theo khoảng thời gian
             df = df[(df['Date'] >= '2018-01-01') & (df['Date'] < '2025-01-01')]
@@ -206,21 +204,38 @@ class StockTradingEnv:
         self.trend_change_frequency = np.sum(ma_cross) / len(ma_cross)
 
 
-    def load_vnindex_data(self):
-        """Load VN-Index data for beta calculation"""
-        # Tìm VNINDEX.csv trong parent directories
+    def load_market_index_data(self):
+        """Load market index data for beta calculation (SET for Thailand, GSPC for US, VNINDEX for Vietnam)"""
+        # Tìm market index file trong dataset directory
         current_dir = os.path.dirname(self.data_path)
-        vnindex_path = os.path.join(current_dir, "VNINDEX.csv")
-        print(f"DEBUG: Looking for VNINDEX at: {vnindex_path}")
-        print(f"DEBUG: File exists: {os.path.exists(vnindex_path)}")    
-        if os.path.exists(vnindex_path):
+        
+        # Detect market index based on available files
+        index_files = {
+            'SET.csv': 'SET Index (Thailand)',
+            'GSPC.csv': 'S&P 500 (US)',
+            '^GSPC.csv': 'S&P 500 (US)',
+            'VNINDEX.csv': 'VN-Index (Vietnam)'
+        }
+        
+        market_index_path = None
+        market_name = None
+        
+        for index_file, name in index_files.items():
+            test_path = os.path.join(current_dir, index_file)
+            if os.path.exists(test_path):
+                market_index_path = test_path
+                market_name = name
+                break
+        
+        if market_index_path:
             try:
-                df = pd.read_csv(vnindex_path)
+                df = pd.read_csv(market_index_path)
                 
                 # Standardize column names
                 column_mapping = {
                     'date': 'Date',
                     'close_price': 'Close',
+                    'Close_price': 'Close',
                 }
                 
                 for old_col, new_col in column_mapping.items():
@@ -235,19 +250,19 @@ class StockTradingEnv:
                 df['Returns'] = df['Close'].pct_change()
                 df = df.dropna()
                 
-                self.vnindex_data = df
-                print(" VN-Index data loaded successfully for classification")
+                self.market_index_data = df
+                print(f"✓ {market_name} data loaded successfully for classification")
                 return True
                 
             except Exception as e:
-                print(f"Warning: Could not load VN-Index data: {e}")
+                print(f"Warning: Could not load market index data: {e}")
                 print("Will use alternative cyclical indicators")
-                self.vnindex_data = None
+                self.market_index_data = None
                 return False
         else:
-            print("Warning: VNINDEX.csv not found")
+            print(f"Warning: No market index file found in {current_dir}")
             print("Will use alternative cyclical indicators")
-            self.vnindex_data = None
+            self.market_index_data = None
             return False
 
     def calculate_beta(self, stock_returns, market_returns):
@@ -279,7 +294,7 @@ class StockTradingEnv:
         """
         
         print(f"=== SCIENTIFIC CLASSIFICATION: {self.stock_code} ===")
-        self.load_vnindex_data()
+        self.load_market_index_data()
         # ===== 1. DATA LOADING & VALIDATION =====
         try:
             print("Step 1: Loading full dataset for classification...")
@@ -467,9 +482,9 @@ class StockTradingEnv:
         hurst_exponent = hurst_simplified(returns)
         
         # ===== MARKET SENSITIVITY =====
-        beta_to_vnindex = np.nan
-        if hasattr(self, 'vnindex_data') and self.vnindex_data is not None:
-            beta_to_vnindex = self._calculate_beta_with_market(df, self.vnindex_data)
+        beta_to_market = np.nan
+        if hasattr(self, 'market_index_data') and self.market_index_data is not None:
+            beta_to_market = self._calculate_beta_with_market(df, self.market_index_data)
         
         # ===== TREND CHARACTERISTICS =====
         ma_20 = close_prices.rolling(20, min_periods=1).mean()
@@ -492,7 +507,7 @@ class StockTradingEnv:
             'autocorr_5d': autocorr_5d,
             'autocorr_20d': autocorr_20d,
             'hurst_exponent': hurst_exponent,
-            'beta_to_vnindex': beta_to_vnindex,
+            'beta_to_market': beta_to_market,
             'trend_change_frequency': trend_change_frequency,
             'skewness': skewness,
             'kurtosis': kurtosis,
