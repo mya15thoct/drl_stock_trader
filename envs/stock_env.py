@@ -100,8 +100,11 @@ class StockTradingEnv:
             df['Date'] = pd.to_datetime(df['Date'], errors='coerce', utc=True).dt.tz_localize(None)
             df = df.dropna(subset=['Date'])  # Loại bỏ các hàng có ngày không hợp lệ
             
-            # Tiếp tục lọc dữ liệu theo khoảng thời gian (use pd.Timestamp for pandas 2.0+ compatibility)
-            df = df[(df['Date'] >= pd.Timestamp('2018-01-01')) & (df['Date'] < pd.Timestamp('2025-01-01'))]
+            # Hiện giờ in ra thông tin ngày sau khi đã chuyển đổi kiểu
+            # print(f"Original date range: {df['Date'].min()} to {df['Date'].max()}")
+            
+            # Tiếp tục lọc dữ liệu theo khoảng thời gian
+            df = df[(df['Date'] >= '2018-01-01') & (df['Date'] < '2025-01-01')]
             # print(f"After date conversion: {df['Date'].min()} to {df['Date'].max()}")
         
         # Sắp xếp dữ liệu theo ngày tăng dần (từ cũ đến mới)
@@ -204,24 +207,13 @@ class StockTradingEnv:
 
 
     def load_vnindex_data(self):
-        """Load market index data (VNINDEX or GSPC) for beta calculation"""
-        # Tìm index file trong data directory
+        """Load VN-Index data for beta calculation"""
+        # Tìm VNINDEX.csv trong parent directories
         current_dir = os.path.dirname(self.data_path)
-        
-        # Try GSPC first (for US market), then VNINDEX (for VN market)
-        for index_file in ['GSPC.csv', 'VNINDEX.csv']:
-            index_path = os.path.join(current_dir, index_file)
-            if os.path.exists(index_path):
-                vnindex_path = index_path
-                print(f"DEBUG: Found market index at: {vnindex_path}")
-                break
-        else:
-            print("Warning: No market index file (GSPC.csv or VNINDEX.csv) found")
-            print("Will use alternative cyclical indicators")
-            self.vnindex_data = None
-            return False
-        
-        if True:  # Always try to load if file exists
+        vnindex_path = os.path.join(current_dir, "VNINDEX.csv")
+        print(f"DEBUG: Looking for VNINDEX at: {vnindex_path}")
+        print(f"DEBUG: File exists: {os.path.exists(vnindex_path)}")    
+        if os.path.exists(vnindex_path):
             try:
                 df = pd.read_csv(vnindex_path)
                 
@@ -235,8 +227,8 @@ class StockTradingEnv:
                     if old_col in df.columns:
                         df = df.rename(columns={old_col: new_col})
                 
-                # Convert date and sort (with timezone handling)
-                df['Date'] = pd.to_datetime(df['Date'], errors='coerce', utc=True).dt.tz_localize(None)
+                # Convert date and sort
+                df['Date'] = pd.to_datetime(df['Date'])
                 df = df.sort_values('Date').reset_index(drop=True)
                 
                 # Calculate returns
@@ -244,14 +236,19 @@ class StockTradingEnv:
                 df = df.dropna()
                 
                 self.vnindex_data = df
-                print(f" Market index data loaded successfully for classification ({len(df)} points)")
+                print(" VN-Index data loaded successfully for classification")
                 return True
                 
             except Exception as e:
-                print(f"Warning: Could not load market index data: {e}")
+                print(f"Warning: Could not load VN-Index data: {e}")
                 print("Will use alternative cyclical indicators")
                 self.vnindex_data = None
                 return False
+        else:
+            print("Warning: VNINDEX.csv not found")
+            print("Will use alternative cyclical indicators")
+            self.vnindex_data = None
+            return False
 
     def calculate_beta(self, stock_returns, market_returns):
         """Calculate beta coefficient with market"""
@@ -305,9 +302,7 @@ class StockTradingEnv:
             # Date processing - convert and STRIP TIMEZONE immediately (pandas 2.0+ compatibility)
             df_full['Date'] = pd.to_datetime(df_full['Date'], errors='coerce', utc=True).dt.tz_localize(None)
             df_full = df_full.dropna(subset=['Date'])
-            
-            # Filter date range (use pd.Timestamp for pandas 2.0+ compatibility)
-            df_full = df_full[(df_full['Date'] >= pd.Timestamp('2018-01-01')) & (df_full['Date'] < pd.Timestamp('2025-01-01'))]
+            df_full = df_full[(df_full['Date'] >= '2018-01-01') & (df_full['Date'] < '2025-01-01')]
             df_full = df_full.sort_values('Date').reset_index(drop=True)
             
             # Numeric conversion
@@ -530,37 +525,25 @@ class StockTradingEnv:
             return np.nan
 
     def _perform_multidimensional_classification(self, metrics):
-        """Multidimensional classification using market-specific thresholds"""
+        """Multidimensional classification using VN market thresholds"""
         
-        # Detect market based on data path
-        is_us_market = 'us_dataset' in self.data_path.lower() or 'us_' in self.data_path.lower()
-        
-        if is_us_market:
-            # US market thresholds (based on 50 US stocks analysis)
-            THRESHOLDS = {
-                'vol_low': 0.275, 'vol_high': 0.326,
-                'risk_low': 0.387, 'risk_high': 0.553,
-                'momentum_low': 0.02, 'momentum_high': 0.10,
-                'hurst_low': -0.02, 'hurst_high': 0.02
-            }
-        else:
-            # VN market thresholds (original)
-            THRESHOLDS = {
-                'vol_low': 0.3832, 'vol_high': 0.4768,
-                'risk_low': 0.6493, 'risk_high': 0.7754,
-                'momentum_low': 0.0321, 'momentum_high': 0.1144,
-                'hurst_low': -0.0103, 'hurst_high': 0.0112
-            }
+        # Load VN thresholds (hard-code từ JSON hoặc load file)
+        VN_THRESHOLDS = {
+            'vol_low': 0.3832, 'vol_high': 0.4768,
+            'risk_low': 0.6493, 'risk_high': 0.7754,
+            'momentum_low': 0.0321, 'momentum_high': 0.1144,
+            'hurst_low': -0.0103, 'hurst_high': 0.0112
+        }
         
         # Normalize all metrics (0-1 scale)
         vol_score = self._normalize_score(metrics['annualized_volatility'], 
-                                        THRESHOLDS['vol_low'], THRESHOLDS['vol_high'])
+                                        VN_THRESHOLDS['vol_low'], VN_THRESHOLDS['vol_high'])
         risk_score = self._normalize_score(abs(metrics['max_drawdown']), 
-                                        THRESHOLDS['risk_low'], THRESHOLDS['risk_high'])
+                                        VN_THRESHOLDS['risk_low'], VN_THRESHOLDS['risk_high'])
         momentum_score = self._normalize_score(abs(metrics['autocorr_1d']), 
-                                            THRESHOLDS['momentum_low'], THRESHOLDS['momentum_high'])
+                                            VN_THRESHOLDS['momentum_low'], VN_THRESHOLDS['momentum_high'])
         hurst_score = self._normalize_score(metrics['hurst_exponent'], 
-                                        THRESHOLDS['hurst_low'], THRESHOLDS['hurst_high'])
+                                        VN_THRESHOLDS['hurst_low'], VN_THRESHOLDS['hurst_high'])
         
         # WEIGHTED COMPOSITE SCORE
         composite_score = (

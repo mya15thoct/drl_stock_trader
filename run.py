@@ -484,13 +484,27 @@ def run_ddpg_for_stocks(data_dir='./us_dataset/', mode='train_and_test', stock_c
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='DDPG Stock Trading')
-    parser.add_argument('--data_dir', type=str, default='./us_dataset/', help='Data directory')
-    parser.add_argument('--mode', type=str, default='train_and_test', choices=['train', 'test', 'train_and_test'], help='Operation mode')
-    parser.add_argument('--stock_code', type=str, default=None, help='Specific stock code (optional)')
+    parser = argparse.ArgumentParser(description='DDPG Stock Trading - Multi-Market Support')
+    parser.add_argument('--market', type=str, default='us', choices=['us', 'thailand', 'th'], 
+                       help='Market to trade: us or thailand')
+    parser.add_argument('--data_dir', type=str, default=None, 
+                       help='Data directory (optional, auto-selected based on market)')
+    parser.add_argument('--mode', type=str, default='train_and_test', 
+                       choices=['train', 'test', 'train_and_test'], help='Operation mode')
+    parser.add_argument('--stock_code', type=str, default=None, 
+                       help='Specific stock code (optional)')
     parser.add_argument('--episodes', type=int, default=5, help='Number of test episodes')
     
     args = parser.parse_args()
+    
+    # Auto-select data directory based on market
+    if args.data_dir is None:
+        if args.market in ['thailand', 'th']:
+            args.data_dir = './thailand_dataset_selected/'
+            print(f"🇹🇭 Trading Thailand Market (SET)")
+        else:
+            args.data_dir = './us_dataset/'
+            print(f"🇺🇸 Trading US Market (S&P 500)")
     
     # Determine stocks to process
     if args.stock_code:
