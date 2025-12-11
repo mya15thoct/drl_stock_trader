@@ -609,7 +609,7 @@ class StockTradingEnv:
             confidence_factors['volatility_stability'] = 0.8  # Unknown but assume moderate
         
         # Metric reliability factors
-        confidence_factors['beta_availability'] = 0.0 if np.isnan(metrics['beta_to_vnindex']) else 1.0
+        confidence_factors['beta_availability'] = 0.0 if np.isnan(metrics['beta_to_market']) else 1.0
         confidence_factors['autocorr_reliability'] = 0.8 if abs(metrics['autocorr_1d']) < 0.05 else 1.0
         
         # Calculate weighted confidence
@@ -649,10 +649,10 @@ class StockTradingEnv:
         print(f"  Maximum Drawdown: {metrics['max_drawdown']:.4f}")
         print(f"  Autocorrelation (1d): {metrics['autocorr_1d']:.4f}")
         print(f"  Hurst Exponent: {metrics['hurst_exponent']:.4f}")
-        if not np.isnan(metrics['beta_to_vnindex']):
-            print(f"  Market Beta: {metrics['beta_to_vnindex']:.4f}")
+        if not np.isnan(metrics['beta_to_market']):
+            print(f"  Market Beta: {metrics['beta_to_market']:.4f}")
         else:
-            print(f"  Market Beta: N/A (VN-Index data unavailable)")
+            print(f"  Market Beta: N/A (Market index data unavailable)")
         
         print(f"\nDATA QUALITY:")
         validation = metrics['validation_results']
