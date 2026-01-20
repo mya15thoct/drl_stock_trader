@@ -59,7 +59,6 @@ class AgentBase:
         self.criterion = getattr(args, 'criterion', th.nn.MSELoss(reduction="none"))
         self.if_vec_env = self.num_envs > 1  # Sử dụng môi trường vector hóa
         self.if_use_per = getattr(args, 'if_use_per', None)  # Sử dụng Prioritized Experience Replay
-        self.lambda_fit_cum_r = getattr(args, 'lambda_fit_cum_r', 0.0)  # Hệ số khớp phần thưởng tích lũy
 
         """Lưu và tải mô hình"""
         self.save_attr_names = {'act', 'act_target', 'act_optimizer', 'cri', 'cri_target', 'cri_optimizer'}
@@ -171,9 +170,6 @@ class AgentBase:
         objs_critic = []
         objs_actor = []
 
-        if self.lambda_fit_cum_r != 0:
-            buffer.update_cum_rewards(get_cumulative_rewards=self.get_cumulative_rewards)
-
         th.set_grad_enabled(True)
         update_times = int(buffer.cur_size * self.repeat_times / self.batch_size)
         for update_t in range(update_times):
@@ -231,25 +227,6 @@ class AgentBase:
             obj_actor = th.tensor(th.nan)
         return obj_critic.item(), obj_actor.item()
 
-    def get_cumulative_rewards(self, rewards: TEN, undones: TEN) -> TEN:
-        """
-        Tính toán phần thưởng tích lũy (phần thưởng có chiết khấu theo thời gian)
-        
-        :param rewards: Mảng phần thưởng
-        :param undones: Mảng trạng thái chưa kết thúc
-        :return: Mảng phần thưởng tích lũy
-        """
-        cum_rewards = th.empty_like(rewards)
-
-        masks = undones * self.gamma
-        horizon_len = rewards.shape[0]
-
-        last_state = self.last_state
-        next_action = self.act_target(last_state)
-        next_value = self.cri_target(last_state, next_action).detach()
-        for t in range(horizon_len - 1, -1, -1):
-            cum_rewards[t] = next_value = rewards[t] + masks[t] * next_value
-        return cum_rewards
 
     def optimizer_backward(self, optimizer: th.optim, objective: TEN):
         """

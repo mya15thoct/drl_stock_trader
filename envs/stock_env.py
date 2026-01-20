@@ -18,8 +18,15 @@ ARY = np.ndarray
 class StockTradingEnv:
     def __init__(self, data_path, stock_code=None, initial_amount=1e6, max_stock=1e2,
                 cost_pct=1e-3, gamma=0.99, tech_indicators_list=None, use_turbulence=False,
-                train_test_split=None, use_train=True, predefined_stock_type=None):
-        
+                train_test_split=None, use_train=True, data_type='train', predefined_stock_type=None):
+        """
+        Args:
+            data_type: 'train', 'validation', hoặc 'test' - chỉ định phần dữ liệu sử dụng
+                      - 'train': 2018-01-01 đến 2023-06-30 (dùng để huấn luyện)
+                      - 'validation': 2023-07-01 đến 2023-12-31 (dùng để đánh giá trong quá trình train)
+                      - 'test': 2024-01-01 đến 2025-01-01 (dùng để kiểm tra cuối cùng)
+            use_train: (deprecated) Giữ lại để tương thích ngược, nếu data_type không được set
+        """
         # Parameter setting
         self.data_path = data_path
         self.initial_amount = initial_amount
@@ -28,9 +35,10 @@ class StockTradingEnv:
         self.reward_scale = 1.0
         self.gamma = gamma
         
-        # Store train/test parameters
+        # Store train/validation/test parameters
         self.train_test_split = train_test_split
         self.use_train = use_train
+        self.data_type = data_type
 
         # Xác định mã cổ phiếu từ tên file nếu không được cung cấp
         if stock_code is None:
@@ -109,21 +117,32 @@ class StockTradingEnv:
         df = df.sort_values('Date', ascending=True)
         # print(f"After sorting: {df['Date'].min()} to {df['Date'].max()} - {len(df)} rows")
         
-        # Phân chia data become train data and test data
+        # Phân chia data thành train/validation/test
         if train_test_split is not None:
-            split_date = pd.Timestamp('2024-01-01')
+            # Định nghĩa các mốc thời gian cho 3 tập dữ liệu
+            train_end_date = pd.Timestamp('2023-07-01')      # Train: 2018-01-01 đến 2023-06-30
+            val_end_date = pd.Timestamp('2024-01-01')        # Validation: 2023-07-01 đến 2023-12-31
+            # Test: 2024-01-01 đến 2025-01-01
+            
             # Lưu lại số lượng dữ liệu ban đầu
             total_rows = len(df)
-            train_data = df[df['Date'] < split_date]
-            test_data = df[df['Date'] >= split_date]
+            train_data = df[df['Date'] < train_end_date]
+            val_data = df[(df['Date'] >= train_end_date) & (df['Date'] < val_end_date)]
+            test_data = df[df['Date'] >= val_end_date]
             
-     
-            if use_train:
+            # Xác định data_type từ use_train nếu chưa được set rõ ràng
+            # (để tương thích ngược với code cũ)
+            data_type = getattr(self, 'data_type', 'train' if use_train else 'test')
+            
+            if data_type == 'train':
                 df = train_data
-                # print(f"Using training data: {len(df)} rows from {df['Date'].min()} to {df['Date'].max()}")
-            else:
+                # print(f"Using TRAINING data: {len(df)} rows from {df['Date'].min()} to {df['Date'].max()}")
+            elif data_type == 'validation':
+                df = val_data
+                # print(f"Using VALIDATION data: {len(df)} rows from {df['Date'].min()} to {df['Date'].max()}")
+            else:  # 'test'
                 df = test_data
-                # print(f"Using testing data: {len(df)} rows from {df['Date'].min()} to {df['Date'].max()}")
+                # print(f"Using TEST data: {len(df)} rows from {df['Date'].min()} to {df['Date'].max()}")
         
         # Save in4 date:
         self.dates = df['Date'].values
@@ -204,38 +223,21 @@ class StockTradingEnv:
         self.trend_change_frequency = np.sum(ma_cross) / len(ma_cross)
 
 
-    def load_market_index_data(self):
-        """Load market index data for beta calculation (SET for Thailand, GSPC for US, VNINDEX for Vietnam)"""
-        # Tìm market index file trong dataset directory
+    def load_vnindex_data(self):
+        """Load VN-Index data for beta calculation"""
+        # Tìm VNINDEX.csv trong parent directories
         current_dir = os.path.dirname(self.data_path)
-        
-        # Detect market index based on available files
-        index_files = {
-            'SET.csv': 'SET Index (Thailand)',
-            'GSPC.csv': 'S&P 500 (US)',
-            '^GSPC.csv': 'S&P 500 (US)',
-            'VNINDEX.csv': 'VN-Index (Vietnam)'
-        }
-        
-        market_index_path = None
-        market_name = None
-        
-        for index_file, name in index_files.items():
-            test_path = os.path.join(current_dir, index_file)
-            if os.path.exists(test_path):
-                market_index_path = test_path
-                market_name = name
-                break
-        
-        if market_index_path:
+        vnindex_path = os.path.join(current_dir, "VNINDEX.csv")
+        print(f"DEBUG: Looking for VNINDEX at: {vnindex_path}")
+        print(f"DEBUG: File exists: {os.path.exists(vnindex_path)}")    
+        if os.path.exists(vnindex_path):
             try:
-                df = pd.read_csv(market_index_path)
+                df = pd.read_csv(vnindex_path)
                 
                 # Standardize column names
                 column_mapping = {
                     'date': 'Date',
                     'close_price': 'Close',
-                    'Close_price': 'Close',
                 }
                 
                 for old_col, new_col in column_mapping.items():
@@ -250,19 +252,19 @@ class StockTradingEnv:
                 df['Returns'] = df['Close'].pct_change()
                 df = df.dropna()
                 
-                self.market_index_data = df
-                print(f"✓ {market_name} data loaded successfully for classification")
+                self.vnindex_data = df
+                print(" VN-Index data loaded successfully for classification")
                 return True
                 
             except Exception as e:
-                print(f"Warning: Could not load market index data: {e}")
+                print(f"Warning: Could not load VN-Index data: {e}")
                 print("Will use alternative cyclical indicators")
-                self.market_index_data = None
+                self.vnindex_data = None
                 return False
         else:
-            print(f"Warning: No market index file found in {current_dir}")
+            print("Warning: VNINDEX.csv not found")
             print("Will use alternative cyclical indicators")
-            self.market_index_data = None
+            self.vnindex_data = None
             return False
 
     def calculate_beta(self, stock_returns, market_returns):
@@ -294,7 +296,7 @@ class StockTradingEnv:
         """
         
         print(f"=== SCIENTIFIC CLASSIFICATION: {self.stock_code} ===")
-        self.load_market_index_data()
+        self.load_vnindex_data()
         # ===== 1. DATA LOADING & VALIDATION =====
         try:
             print("Step 1: Loading full dataset for classification...")
@@ -482,9 +484,9 @@ class StockTradingEnv:
         hurst_exponent = hurst_simplified(returns)
         
         # ===== MARKET SENSITIVITY =====
-        beta_to_market = np.nan
-        if hasattr(self, 'market_index_data') and self.market_index_data is not None:
-            beta_to_market = self._calculate_beta_with_market(df, self.market_index_data)
+        beta_to_vnindex = np.nan
+        if hasattr(self, 'vnindex_data') and self.vnindex_data is not None:
+            beta_to_vnindex = self._calculate_beta_with_market(df, self.vnindex_data)
         
         # ===== TREND CHARACTERISTICS =====
         ma_20 = close_prices.rolling(20, min_periods=1).mean()
@@ -507,7 +509,7 @@ class StockTradingEnv:
             'autocorr_5d': autocorr_5d,
             'autocorr_20d': autocorr_20d,
             'hurst_exponent': hurst_exponent,
-            'beta_to_market': beta_to_market,
+            'beta_to_vnindex': beta_to_vnindex,
             'trend_change_frequency': trend_change_frequency,
             'skewness': skewness,
             'kurtosis': kurtosis,
@@ -609,7 +611,7 @@ class StockTradingEnv:
             confidence_factors['volatility_stability'] = 0.8  # Unknown but assume moderate
         
         # Metric reliability factors
-        confidence_factors['beta_availability'] = 0.0 if np.isnan(metrics['beta_to_market']) else 1.0
+        confidence_factors['beta_availability'] = 0.0 if np.isnan(metrics['beta_to_vnindex']) else 1.0
         confidence_factors['autocorr_reliability'] = 0.8 if abs(metrics['autocorr_1d']) < 0.05 else 1.0
         
         # Calculate weighted confidence
@@ -649,10 +651,10 @@ class StockTradingEnv:
         print(f"  Maximum Drawdown: {metrics['max_drawdown']:.4f}")
         print(f"  Autocorrelation (1d): {metrics['autocorr_1d']:.4f}")
         print(f"  Hurst Exponent: {metrics['hurst_exponent']:.4f}")
-        if not np.isnan(metrics['beta_to_market']):
-            print(f"  Market Beta: {metrics['beta_to_market']:.4f}")
+        if not np.isnan(metrics['beta_to_vnindex']):
+            print(f"  Market Beta: {metrics['beta_to_vnindex']:.4f}")
         else:
-            print(f"  Market Beta: N/A (Market index data unavailable)")
+            print(f"  Market Beta: N/A (VN-Index data unavailable)")
         
         print(f"\nDATA QUALITY:")
         validation = metrics['validation_results']

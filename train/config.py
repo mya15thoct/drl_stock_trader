@@ -8,27 +8,26 @@ Cho phép thiết lập và quản lý các thông số môi trường như số
 '''
 
 import os
+import random
 import numpy as np
 import torch as th
-from typing import Tuple, Dict
+from typing import Tuple, Dict, Any
 from multiprocessing import Pipe, Process
 import sys
-sys.path.append('..')
-from envs.stock_env import StockTradingEnv
 import warnings
-from typing import Tuple, Dict, Any
 import inspect
 
-
+sys.path.append('..')
+from envs.stock_env import StockTradingEnv
 
 TEN = th.Tensor
 
 
 class Config:
     """
-    Lớp cấu hình cho quá trình huấn luyện các agent Deep Reinforcement Learning
+    Lớp cấu hình cho quá trình huấn luyện DDPG agent
     
-    :param agent_class: Lớp agent sẽ được sử dụng (AgentDDPG, AgentTD3, AgentSAC...)
+    :param agent_class: Lớp agent sẽ được sử dụng (AgentDDPG)
     :param env_class: Lớp môi trường (StockTradingEnv)
     :param env_args: Các tham số của môi trường
     """
@@ -68,21 +67,14 @@ class Config:
         self.clip_grad_norm = 3.0  # Giới hạn cắt gradient sau khi chuẩn hóa
         self.state_value_tau = 0  # Hệ số chuẩn hóa trạng thái và giá trị
         self.soft_update_tau = 5e-3  # Hệ số cập nhật mềm
-        if self.if_off_policy:  # Off-policy (DDPG, TD3, SAC...)
+        if self.if_off_policy:  # Off-policy (DDPG)
             self.batch_size = int(128)  # Kích thước batch lấy từ buffer
             self.horizon_len = int(512)  # Số bước khám phá trước khi cập nhật mạng
             self.buffer_size = int(1e6)  # Kích thước buffer, FIFO cho off-policy
             self.repeat_times = 1.0  # Số lần cập nhật lặp lại
             self.if_use_per = False  # Sử dụng PER (Prioritized Experience Replay)
-            self.lambda_fit_cum_r = 0.0  # Critic khớp với giá trị trung bình batch
             self.buffer_init_size = int(self.batch_size * 8)  # Kích thước buffer tối thiểu trước khi huấn luyện
-        else:  # On-policy (A2C, PPO...)
-            self.batch_size = int(128)  # Kích thước batch lấy từ buffer
-            self.horizon_len = int(2048)  # Số bước khám phá trước khi cập nhật mạng
-            self.buffer_size = None  # Xóa buffer sau mỗi lần cập nhật
-            self.repeat_times = 8.0  # Số lần cập nhật lặp lại
-            self.if_use_vtrace = True  # Sử dụng V-trace + GAE
-            self.buffer_init_size = None  # Không cần thiết cho on-policy
+
 
         '''Tham số cho thiết bị'''
         self.gpu_id = int(0)  # ID của GPU, -1 nghĩa là CPU
@@ -114,8 +106,12 @@ class Config:
         """Khởi tạo trước khi huấn luyện"""
         if self.random_seed is None:
             self.random_seed = max(0, self.gpu_id)
-        np.random.seed(self.random_seed)
-        th.manual_seed(self.random_seed)
+        random.seed(self.random_seed)      # Python random
+        np.random.seed(self.random_seed)   # NumPy random
+        th.manual_seed(self.random_seed)   # PyTorch random
+        if th.cuda.is_available():
+            th.cuda.manual_seed(self.random_seed)
+            th.cuda.manual_seed_all(self.random_seed)  # Cho multi-GPU
         th.set_num_threads(self.num_threads)
         th.set_default_dtype(th.float32)
 
@@ -140,6 +136,7 @@ class Config:
     def get_if_off_policy(self) -> bool:
         """Xác định xem agent có phải là off-policy không"""
         agent_name = self.agent_class.__name__ if self.agent_class else ''
+        # Danh sách on-policy agents để phát hiện (project này chỉ dùng DDPG - off-policy)
         on_policy_names = ('SARSA', 'VPG', 'A2C', 'A3C', 'TRPO', 'PPO', 'MPO')
         return all([agent_name.find(s) == -1 for s in on_policy_names])
 
@@ -224,6 +221,7 @@ class SubEnv(Process):
 
         '''Đặt hạt ngẫu nhiên cho môi trường'''
         random_seed = self.env_id
+        random.seed(random_seed)
         np.random.seed(random_seed)
         th.manual_seed(random_seed)
 

@@ -18,9 +18,6 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 mpl.use('Agg')
 
-
-import matplotlib.pyplot as plt
-fig, axs = plt.subplots(2)
 TEN = th.Tensor
 from envs.stock_env import StockTradingEnv
 
@@ -196,7 +193,7 @@ def get_rewards_and_steps(env, actor, if_render: bool = False) -> Tuple[float, i
     """Usage
     eval_times = 4
     net_dim = 2 ** 7
-    actor_path = './LunarLanderContinuous-v2_PPO_1/actor.pt'
+    actor_path = './ExampleStockTrading_DDPG_0/actor.pt'
 
     env = build_env(env_class=env_class, env_args=env_args)
     actor = agent(net_dim, env.state_dim, env.action_dim, gpu_id=gpu_id).act

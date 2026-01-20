@@ -50,6 +50,12 @@ class ThailandStockAnalyzer:
         # Calculate returns
         df['Returns'] = df['Close'].pct_change()
         
+        # Calculate maximum drawdown
+        close_prices = df['Close'].values
+        rolling_max = np.maximum.accumulate(close_prices)
+        drawdown = (close_prices / rolling_max - 1.0)
+        max_drawdown = np.abs(np.min(drawdown))
+        
         # Basic metrics
         metrics = {
             'symbol': symbol,
@@ -60,7 +66,8 @@ class ThailandStockAnalyzer:
             'end_price': df['Close'].iloc[-1],
             'total_return': (df['Close'].iloc[-1] / df['Close'].iloc[0] - 1) * 100,
             'avg_volume': df['Volume'].mean(),
-            'volatility': df['Returns'].std() * np.sqrt(252) * 100,  # Annualized
+            'volatility': df['Returns'].std() * np.sqrt(252),  # Annualized (not in %)
+            'drawdown': max_drawdown,  # Maximum drawdown
             'sharpe_ratio': (df['Returns'].mean() / df['Returns'].std()) * np.sqrt(252) if df['Returns'].std() > 0 else 0,
         }
         
@@ -134,11 +141,81 @@ class ThailandStockAnalyzer:
         print("="*80)
         for i, row in top_df.iterrows():
             print(f"{row['symbol']:8s} | Return: {row['total_return']:6.2f}% | "
-                  f"Sharpe: {row['sharpe_ratio']:5.2f} | Vol: {row['volatility']:5.2f}% | "
-                  f"Trend: {row['trend']}")
+                  f"Sharpe: {row['sharpe_ratio']:5.2f} | Vol: {row['volatility']:.3f} | "
+                  f"DD: {row['drawdown']:.3f} | Trend: {row['trend']}")
         
         top_stocks = top_df['symbol'].tolist()
         return top_stocks
+    
+    def select_stocks_by_risk(self, low_risk=3, medium_risk=3, high_risk=3):
+        """
+        Select stocks by risk classification using quantile thresholds
+        Similar to US market classification method
+        
+        Args:
+            low_risk: Number of low-risk stocks to select
+            medium_risk: Number of medium-risk stocks to select
+            high_risk: Number of high-risk stocks to select
+        
+        Returns:
+            Dictionary with 'low', 'medium', 'high' risk stocks
+        """
+        
+        if not self.analysis_results:
+            self.analyze_all_stocks()
+        
+        df = pd.DataFrame(self.analysis_results.values())
+        
+        # Filter out stocks with insufficient data
+        df = df[df['days'] >= 252]  # At least 1 year of data
+        df = df[df['avg_volume'] > 100000]  # Minimum volume
+        
+        print(f"\nTotal Thailand stocks after filtering: {len(df)}")
+        
+        # Calculate thresholds using quantiles (same method as US)
+        vol_low = df['volatility'].quantile(0.33)
+        vol_high = df['volatility'].quantile(0.67)
+        dd_low = df['drawdown'].quantile(0.33)
+        dd_high = df['drawdown'].quantile(0.67)
+        
+        print(f"\nTHAILAND THRESHOLDS:")
+        print(f"  Vol:  Low={vol_low:.3f}, High={vol_high:.3f}")
+        print(f"  DD:   Low={dd_low:.3f}, High={dd_high:.3f}")
+        
+        # Calculate composite risk score (60% volatility, 40% drawdown)
+        df['vol_score'] = (df['volatility'] - vol_low) / (vol_high - vol_low)
+        df['dd_score'] = (df['drawdown'] - dd_low) / (dd_high - dd_low)
+        df['composite'] = df['vol_score'] * 0.6 + df['dd_score'] * 0.4
+        
+        # Classify stocks
+        low_risk_df = df[df['composite'] < 0.33].sort_values('days', ascending=False).head(low_risk)
+        medium_risk_df = df[(df['composite'] >= 0.33) & (df['composite'] <= 0.67)].sort_values('days', ascending=False).head(medium_risk)
+        high_risk_df = df[df['composite'] > 0.67].sort_values('days', ascending=False).head(high_risk)
+        
+        print(f"\n{'='*80}")
+        print("THAILAND STOCKS CLASSIFIED BY RISK")
+        print(f"{'='*80}")
+        
+        print(f"\nLow-Risk ({low_risk} stocks):")
+        for _, row in low_risk_df.iterrows():
+            print(f"  • {row['symbol']:8s} Vol={row['volatility']:.3f} DD={row['drawdown']:.3f} Composite={row['composite']:.3f}")
+        
+        print(f"\nMedium-Risk ({medium_risk} stocks):")
+        for _, row in medium_risk_df.iterrows():
+            print(f"  • {row['symbol']:8s} Vol={row['volatility']:.3f} DD={row['drawdown']:.3f} Composite={row['composite']:.3f}")
+        
+        print(f"\nHigh-Risk ({high_risk} stocks):")
+        for _, row in high_risk_df.iterrows():
+            print(f"  • {row['symbol']:8s} Vol={row['volatility']:.3f} DD={row['drawdown']:.3f} Composite={row['composite']:.3f}")
+        
+        result = {
+            'low': low_risk_df['symbol'].tolist(),
+            'medium': medium_risk_df['symbol'].tolist(),
+            'high': high_risk_df['symbol'].tolist(),
+            'all': low_risk_df['symbol'].tolist() + medium_risk_df['symbol'].tolist() + high_risk_df['symbol'].tolist()
+        }
+        
+        return result
     
     def save_selected_stocks(self, symbols, output_file='thailand_stocks.txt'):
         """Save selected stock symbols to a text file"""
@@ -197,16 +274,19 @@ def main():
     # Generate full report
     report_df = analyzer.generate_report()
     
-    # Select top stocks
+    # Select stocks by risk classification (same method as US)
     print("\n" + "="*80)
-    print("SELECTING TOP STOCKS FOR DRL TRADING")
+    print("SELECTING THAILAND STOCKS BY RISK CLASSIFICATION")
     print("="*80)
     
-    # Select top 9 stocks by Sharpe ratio (risk-adjusted return)
-    top_stocks = analyzer.select_top_stocks(n=9, criteria='sharpe_ratio')
+    # Select 9 stocks: 3 low-risk, 3 medium-risk, 3 high-risk
+    risk_classified_stocks = analyzer.select_stocks_by_risk(low_risk=3, medium_risk=3, high_risk=3)
     
     # Save to file
-    analyzer.save_selected_stocks(top_stocks, 'thailand_9_stocks.txt')
+    all_selected = risk_classified_stocks['all']
+    analyzer.save_selected_stocks(all_selected, 'thailand_9_stocks.txt')
+    
+    print(f"\nFINAL 9 THAILAND STOCKS: {', '.join(all_selected)}")
     
     # Save full report to CSV
     report_df.to_csv('classification/thailand_analysis_report.csv', index=False)

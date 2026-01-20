@@ -133,21 +133,9 @@ def analyze_trading_results(
     # Create detailed trade table
     trade_days = df[df['Trade_Type'] != 'NO TRADE'].copy()
     
-    # Create charts and save data
+    # Create charts and save summary
     if save_path:
         create_trading_charts(df, initial_amount, model_return, buy_hold_return, save_path, stock_name, algorithm_name)
-        df.to_csv(f"{save_path}/trading_results.csv", index=False)
-        
-        # Save detailed trading table if we have any trades
-        if not trade_days.empty:
-            trade_days.to_csv(f"{save_path}/trade_details.csv", index=False)
-            
-            # Print trading details to terminal
-            print("\nTrading List:")
-            print(f"{'Date':12} | {'Type':10} | {'Price':8} | {'Position':6} | {'Portfolio':12}")
-            print('-' * 55)
-            for idx, row in trade_days.iterrows():
-                print(f"{row['Date'].strftime('%Y-%m-%d'):12} | {row['Trade_Type']:10} | {row['Price']:8.2f} | {row['Action']:6.2f} | {row['Portfolio']:12.2f}")
     
     # Statistics summary
     statistics = {
@@ -160,6 +148,23 @@ def analyze_trading_results(
         'max_drawdown': max_drawdown * 100,
         'final_portfolio': portfolio_values[-1]
     }
+    
+    # Save concise trading summary CSV
+    if save_path:
+        summary_data = {
+            'Stock': [stock_name if stock_name else 'Unknown'],
+            'Algorithm': [algorithm_name if algorithm_name else 'DDPG'],
+            'Model_Return_%': [round(model_return, 2)],
+            'Buy_Hold_Return_%': [round(buy_hold_return, 2)],
+            'Alpha_%': [round(alpha, 2)],
+            'Sharpe_Ratio': [round(sharpe_ratio, 2)],
+            'Sortino_Ratio': [round(sortino_ratio, 2)],
+            'Max_Drawdown_%': [round(max_drawdown * 100, 2)],
+            'Total_Trades': [int(total_trades)],
+            'Final_Portfolio': [round(portfolio_values[-1], 2)]
+        }
+        summary_df = pd.DataFrame(summary_data)
+        summary_df.to_csv(f"{save_path}/trading_summary.csv", index=False)
     
     # Thêm phần so sánh với chiến lược thị trường
     if compare_with_market_strategies:
@@ -309,56 +314,7 @@ def create_trading_charts(df, initial_amount, model_return, buy_hold_return, sav
     
     plt.tight_layout()
     plt.savefig(f"{save_path}/trading_analysis.png", dpi=300)
-    plt.close('all')  # Close figures to free memory
-    
-    # Create return distribution chart
-    fig, ax = plt.subplots(figsize=(10, 6))
-    df['Daily_Return'].hist(bins=50, ax=ax)
-    ax.set_title('Distribution of Daily Returns', fontsize=14, fontweight='bold')
-    ax.set_xlabel('Daily Return')
-    ax.set_ylabel('Frequency')
-    plt.tight_layout()
-    plt.savefig(f"{save_path}/return_distribution.png", dpi=300)
-    plt.close('all')  # Close figures to free memory
-    
-    # Tạo biểu đồ phân tích vị trí theo thời gian
-    try:
-        fig, ax = plt.subplots(figsize=(15, 8))
-        colors = {
-            'STRONG BUY': 'darkgreen', 
-            'BUY': 'green', 
-            'HOLD': 'gray', 
-            'SELL': 'red', 
-            'STRONG SELL': 'darkred'
-        }
-        
-        # Kiểm tra và tạo nhãn cho legend
-        legend_handles = []
-        legend_labels = []
-        
-        for position, color in colors.items():
-            position_data = df[df['Position'] == position]
-            if not position_data.empty:
-                scatter = ax.scatter(position_data['Date'], position_data['Price'], 
-                                     s=30, color=color, label=position)
-                legend_handles.append(scatter)
-                legend_labels.append(position)
-        
-        # Vẽ đường giá cơ bản
-        ax.plot(df['Date'], df['Price'], '-', color='blue', alpha=0.3)
-        ax.set_title('Position Analysis Over Time', fontsize=14, fontweight='bold')
-        ax.set_xlabel('Date')
-        ax.set_ylabel('Price')
-        
-        # Chỉ thêm legend nếu có dữ liệu
-        if legend_handles:
-            ax.legend(handles=legend_handles, labels=legend_labels)
-            
-        plt.tight_layout()
-        plt.savefig(f"{save_path}/position_analysis.png", dpi=300)
-        plt.close('all')  # Close figures to free memory
-    except Exception as e:
-        print(f"Warning: Could not create position analysis chart: {e}")
+    plt.close('all')
 
 
 def calculate_sharpe_ratio(returns, risk_free_rate=0.0, periods=252):

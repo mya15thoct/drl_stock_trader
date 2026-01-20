@@ -58,10 +58,12 @@ def train_agent_single_process(args: Config) -> Dict[str, Any]:
         if_use_per=args.if_use_per,
     )
         
-    # Khởi tạo evaluator
+    # Khởi tạo evaluator với validation environment
     eval_env_class = args.eval_env_class if args.eval_env_class else args.env_class
-    eval_env_args = args.eval_env_args if args.eval_env_args else args.env_args
-    eval_env_args = eval_env_args.copy()
+    eval_env_args = args.eval_env_args if args.eval_env_args else args.env_args.copy()
+    # Sử dụng validation data cho evaluator (thay vì test data)
+    eval_env_args['data_type'] = 'validation'
+    eval_env_args['use_train'] = False  # Không dùng train data
     eval_env = build_env(eval_env_class, eval_env_args, args.gpu_id)
     evaluator = Evaluator(cwd=args.cwd, env=eval_env, args=args, if_tensorboard=False)
     
@@ -153,6 +155,7 @@ def train_trading_ddpg(stock_code, data_path=None):
         'action_dim': test_env.action_dim,
         'if_discrete': False,
         'train_test_split': 0.8,
+        'data_type': 'train',  # Sử dụng training data (2018-01-01 đến 2023-06-30)
         'use_train': True,
         'initial_amount': 1e6,
         'max_stock': 1e2,
@@ -217,6 +220,7 @@ def train_trading_ddpg(stock_code, data_path=None):
     args.break_step = int(5e5)
     args.gpu_id = 0
     args.eval_times = 4
+    args.random_seed = 42  # Seed cố định để reproducible
     
     # Bắt đầu huấn luyện
     result_dict = train_agent_single_process(args)
@@ -248,12 +252,14 @@ def test_trained_ddpg_agent(agent_path, test_episodes=10, stock_code=None, data_
         'action_dim': 1,
         'if_discrete': False,
         'train_test_split': 0.8,  
+        'data_type': 'test',  # Sử dụng test data (2024-01-01 đến 2025-01-01)
         'use_train': False,  # Sử dụng tập kiểm thử
     }
     
     # Khởi tạo môi trường và agent
     env = StockTradingEnv(data_path=env_args['data_path'], 
                         train_test_split=env_args['train_test_split'], 
+                        data_type=env_args['data_type'],
                         use_train=env_args['use_train'])
     env_args['state_dim'] = env.state_dim
     env_args['action_dim'] = env.action_dim

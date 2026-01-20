@@ -1,0 +1,19 @@
+# Deep Reinforcement Learning Stock Trader
+# Requirements for Vietnam Stock Experiment
+
+# Core ML/DL
+torch>=2.0.0
+numpy>=1.24.0
+pandas>=2.0.0
+
+# Visualization
+matplotlib>=3.7.0
+
+# Data download (CafeF API)
+requests>=2.28.0
+
+# Utilities
+tqdm>=4.65.0
+
+# Optional: GPU support (uncomment if using CUDA)
+# torch-cuda>=2.0.0
